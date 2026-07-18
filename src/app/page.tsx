@@ -5,12 +5,16 @@ import { ArrowRight, Check, Clock3, Cpu, Flame, FolderCheck, Play, Target, Timer
 import { useApp } from "@/lib/store";
 import { completedTasks, currentPhase, getLevel, getStreak, getXP, overallProgress, phaseProgress, totalMinutes, weekMinutes } from "@/lib/stats";
 import { ProgressBar } from "@/components/ui";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { StudyTimer } from "@/components/study-timer";
 
 export default function Home() {
   const { data, toggleTask } = useApp();
   const [timerOpen, setTimerOpen] = useState(false);
+  const [today, setToday] = useState("Oggi");
+  useEffect(() => {
+    setToday(new Intl.DateTimeFormat("it-IT", { weekday: "long", day: "numeric", month: "long" }).format(new Date()));
+  }, []);
   const xp = getXP(data), level = getLevel(xp), phase = currentPhase(data), progress = phaseProgress(phase);
   const nextTasks = data.phases.flatMap((item) => item.tasks.map((task) => ({...task, phase:item}))).filter((item) => !item.completed).slice(0,4);
   const mission = nextTasks[0];
@@ -22,7 +26,7 @@ export default function Home() {
     { label:"Tempo totale", value:`${(totalMinutes(data)/60).toFixed(1)}h`, icon:Clock3 },
   ];
   return <>
-    <header className="page-head"><div><p className="eyebrow">Sabato, 18 luglio</p><h1>Continua a costruire.</h1><p className="muted">Ogni piccolo circuito, commit e prototipo ti porta più vicino.</p></div><button className="btn icon-btn" onClick={()=>setTimerOpen(true)} aria-label="Avvia timer"><Timer size={19}/></button></header>
+    <header className="page-head"><div><p className="eyebrow">{today}</p><h1>Continua a costruire.</h1><p className="muted">Ogni piccolo circuito, commit e prototipo ti porta più vicino.</p></div><button className="btn icon-btn" onClick={()=>setTimerOpen(true)} aria-label="Avvia timer"><Timer size={19}/></button></header>
     <section className="hero-grid">
       <article className="card mission">
         <div className="phase-top"><div><p className="eyebrow">Current mission</p><h2>{mission?.title ?? "Percorso completato"}</h2><p className="muted">{mission ? `Fase ${mission.phase.order} · ${mission.phase.title}` : "Hai completato tutte le attività."}</p></div><span className="tag">{mission?.difficulty}</span></div>
