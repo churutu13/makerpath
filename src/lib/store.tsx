@@ -1,16 +1,28 @@
 "use client";
 
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import type { User } from "@supabase/supabase-js";
 import { createSeedData } from "./seed";
+import { getSupabaseBrowserClient, isSupabaseConfigured } from "./supabase/client";
 import type { AppData, Phase, Project, Resource, StudySession, Task, TimerState } from "./types";
 
 const STORAGE_KEY = "makerpath:data:v1";
 const TIMER_KEY = "makerpath:timer:v2";
 
+export type SyncStatus = "unconfigured" | "local" | "loading" | "saving" | "synced" | "error";
+
 interface AppContextValue {
   data: AppData;
   hydrated: boolean;
   timer: TimerState;
+  user: User | null;
+  authLoading: boolean;
+  supabaseConfigured: boolean;
+  syncStatus: SyncStatus;
+  syncError: string;
+  signIn: (email: string, password: string) => Promise<string | null>;
+  signUp: (email: string, password: string) => Promise<string | null>;
+  signOut: () => Promise<string | null>;
   toggleTask: (phaseId: string, taskId: string) => void;
   saveTask: (phaseId: string, task: Task) => void;
   deleteTask: (phaseId: string, taskId: string) => void;
@@ -55,6 +67,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [data, setData] = useState<AppData>(createSeedData);
   const [hydrated, setHydrated] = useState(false);
   const [timer, setTimer] = useState<TimerState>({ running: false, startedAt: null, accumulated: 0 });
+  const [user, setUser] = useState<User | null>(null);
+  const [authLoading, setAuthLoading] = useState(isSupabaseConfigured);
+  const [remoteReady, setRemoteReady] = useState(false);
+  const [syncStatus, setSyncStatus] = useState<SyncStatus>(isSupabaseConfigured ? "local" : "unconfigured");
+  const [syncError, setSyncError] = useState("");
+  const dataRef = useRef(data);
+  const supabase = useMemo(() => getSupabaseBrowserClient(), []);
+
+  useEffect(() => {
+    dataRef.current = data;
+  }, [data]);
 
   useEffect(() => {
     try {
@@ -80,6 +103,109 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     if (hydrated) localStorage.setItem(TIMER_KEY, JSON.stringify(timer));
   }, [timer, hydrated]);
+
+  useEffect(() => {
+    if (!supabase) {
+      setAuthLoading(false);
+      return;
+    }
+
+    let active = true;
+    void supabase.auth.getSession().then(({ data: sessionData }) => {
+      if (!active) return;
+      setUser(sessionData.session?.user ?? null);
+      setAuthLoading(false);
+    });
+
+    const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return;
+      setUser(session?.user ?? null);
+      setAuthLoading(false);
+      setRemoteReady(false);
+    });
+
+    return () => {
+      active = false;
+      listener.subscription.unsubscribe();
+    };
+  }, [supabase]);
+
+  useEffect(() => {
+    if (!hydrated || authLoading) return;
+    if (!supabase || !user) {
+      setRemoteReady(false);
+      setSyncStatus(supabase ? "local" : "unconfigured");
+      setSyncError("");
+      return;
+    }
+
+    let active = true;
+    const hydrateRemote = async () => {
+      setSyncStatus("loading");
+      setSyncError("");
+      const { data: remote, error } = await supabase
+        .from("makerpath_user_data")
+        .select("payload")
+        .eq("user_id", user.id)
+        .maybeSingle();
+
+      if (!active) return;
+      if (error) {
+        setSyncStatus("error");
+        setSyncError("Impossibile caricare i dati cloud. I dati locali restano disponibili.");
+        return;
+      }
+
+      const remoteData = remote ? migrateData(remote.payload) : null;
+      if (remoteData) {
+        setData(remoteData);
+      } else {
+        const { error: uploadError } = await supabase
+          .from("makerpath_user_data")
+          .upsert({
+            user_id: user.id,
+            payload: dataRef.current,
+            updated_at: new Date().toISOString(),
+          });
+        if (!active) return;
+        if (uploadError) {
+          setSyncStatus("error");
+          setSyncError("Impossibile migrare i dati locali nel cloud.");
+          return;
+        }
+      }
+
+      setRemoteReady(true);
+      setSyncStatus("synced");
+    };
+
+    void hydrateRemote();
+    return () => {
+      active = false;
+    };
+  }, [authLoading, hydrated, supabase, user]);
+
+  useEffect(() => {
+    if (!supabase || !user || !remoteReady) return;
+    setSyncStatus("saving");
+    const timeout = window.setTimeout(async () => {
+      const { error } = await supabase
+        .from("makerpath_user_data")
+        .upsert({
+          user_id: user.id,
+          payload: dataRef.current,
+          updated_at: new Date().toISOString(),
+        });
+      if (error) {
+        setSyncStatus("error");
+        setSyncError("Sincronizzazione non riuscita. Le modifiche sono comunque salvate sul dispositivo.");
+      } else {
+        setSyncStatus("synced");
+        setSyncError("");
+      }
+    }, 650);
+    return () => window.clearTimeout(timeout);
+  }, [data, remoteReady, supabase, user]);
 
   useEffect(() => {
     document.documentElement.dataset.theme = data.settings.theme;
@@ -120,11 +246,31 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setData(imported);
   }, []);
   const exportData = useCallback(() => JSON.stringify(data, null, 2), [data]);
+  const signIn = useCallback(async (email: string, password: string) => {
+    if (!supabase) return "Supabase non è ancora configurato.";
+    setAuthLoading(true);
+    const { error } = await supabase.auth.signInWithPassword({ email, password });
+    setAuthLoading(false);
+    return error ? error.message : null;
+  }, [supabase]);
+  const signUp = useCallback(async (email: string, password: string) => {
+    if (!supabase) return "Supabase non è ancora configurato.";
+    setAuthLoading(true);
+    const { error } = await supabase.auth.signUp({ email, password });
+    setAuthLoading(false);
+    return error ? error.message : null;
+  }, [supabase]);
+  const signOut = useCallback(async () => {
+    if (!supabase) return null;
+    const { error } = await supabase.auth.signOut();
+    return error ? error.message : null;
+  }, [supabase]);
 
   const value = useMemo(() => ({
-    data, hydrated, timer, toggleTask, saveTask, deleteTask, updatePhase, saveProject, deleteProject,
+    data, hydrated, timer, user, authLoading, supabaseConfigured: isSupabaseConfigured, syncStatus, syncError, signIn, signUp, signOut,
+    toggleTask, saveTask, deleteTask, updatePhase, saveProject, deleteProject,
     saveResource, deleteResource, addSession, updateSettings, startTimer, pauseTimer, stopTimer, resetData, importData, exportData,
-  }), [data, hydrated, timer, toggleTask, saveTask, deleteTask, updatePhase, saveProject, deleteProject, saveResource, deleteResource, addSession, updateSettings, startTimer, pauseTimer, stopTimer, resetData, importData, exportData]);
+  }), [data, hydrated, timer, user, authLoading, syncStatus, syncError, signIn, signUp, signOut, toggleTask, saveTask, deleteTask, updatePhase, saveProject, deleteProject, saveResource, deleteResource, addSession, updateSettings, startTimer, pauseTimer, stopTimer, resetData, importData, exportData]);
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 }
