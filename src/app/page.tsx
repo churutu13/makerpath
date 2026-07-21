@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { ArrowRight, Check, Clock3, Cpu, Flame, FolderCheck, Play, Target, Timer } from "lucide-react";
+import { ArrowRight, Check, Clock3, Flame, FolderCheck, Play, Target, Timer } from "lucide-react";
 import { useApp } from "@/lib/store";
 import { completedTasks, currentPhase, getLevel, getStreak, getXP, overallProgress, phaseProgress, totalMinutes, weekMinutes } from "@/lib/stats";
 import { ProgressBar } from "@/components/ui";
@@ -37,11 +37,6 @@ export default function Home() {
         <div className="progress-row"><span>Percorso complessivo</span><span>{overallProgress(data)}%</span></div><ProgressBar value={overallProgress(data)}/>
       </article>
     </section>
-    <Link href="/command-center" className="card hover" style={{display:"flex",alignItems:"center",gap:16,marginBottom:28,padding:18}}>
-      <span className="brand-mark" style={{width:44,height:44,flex:"0 0 auto"}}><Cpu size={20}/></span>
-      <span style={{minWidth:0,flex:1}}><span className="eyebrow" style={{display:"block",marginBottom:4}}>MakerPath OS</span><strong style={{display:"block",fontSize:16}}>Apri Command Center</strong><span className="muted" style={{fontSize:12}}>Jarvis Core · Telemetria in tempo reale</span></span>
-      <ArrowRight size={18} color="var(--muted)"/>
-    </Link>
     <section className="grid stats-grid">{stats.map(({label,value,icon:Icon})=><article className="card stat" key={label}><Icon className="stat-icon" size={19}/><div><div className="stat-value">{value}</div><div className="stat-label">{label}</div></div></article>)}</section>
     <section className="section grid" style={{gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))"}}>
       <div><div className="section-head"><div><p className="eyebrow">In coda</p><h2>Next up</h2></div><Link className="btn ghost" href="/roadmap">Roadmap<ArrowRight size={15}/></Link></div><div className="list">{nextTasks.slice(1,4).map((item,i)=><div className="row" key={item.id}><span className="phase-number">0{i+2}</span><div className="row-main"><p className="row-title">{item.title}</p><p className="row-meta">{item.phase.shortTitle} · {item.duration} min</p></div><button className="check" onClick={()=>toggleTask(item.phase.id,item.id)} aria-label="Completa"><Check size={14}/></button></div>)}</div></div>

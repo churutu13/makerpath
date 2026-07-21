@@ -86,16 +86,6 @@ export interface Settings {
   studyDays: number[];
   theme: "dark" | "light";
   reduceMotion: boolean;
-  jarvis: JarvisSettings;
-}
-
-export interface JarvisSettings {
-  sounds: boolean;
-  animations: boolean;
-  voiceRate: number;
-  voiceVolume: number;
-  wakePhrase: string;
-  voiceResponses: boolean;
 }
 
 export interface AppData {

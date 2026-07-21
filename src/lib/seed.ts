@@ -91,13 +91,5 @@ export const createSeedData = (): AppData => ({
     studyDays: [1, 3, 5],
     theme: "dark",
     reduceMotion: false,
-    jarvis: {
-      sounds: true,
-      animations: true,
-      voiceRate: .96,
-      voiceVolume: 1,
-      wakePhrase: "Ciao, Jarvis",
-      voiceResponses: true,
-    },
   },
 });

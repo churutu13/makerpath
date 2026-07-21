@@ -27,7 +27,6 @@ export function AppShell({ children }: { children: React.ReactNode }) {
   }, [timer.running]);
   const elapsed = timer.accumulated + (timer.running && timer.startedAt ? now - timer.startedAt : 0);
   const format = (ms: number) => `${String(Math.floor(ms / 3600000)).padStart(2,"0")}:${String(Math.floor(ms / 60000) % 60).padStart(2,"0")}:${String(Math.floor(ms / 1000) % 60).padStart(2,"0")}`;
-  if (path === "/command-center") return <>{children}</>;
   return (
     <div className="app">
       <aside className="sidebar">
