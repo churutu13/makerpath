@@ -43,23 +43,28 @@ interface AppContextValue {
 
 const AppContext = createContext<AppContextValue | null>(null);
 
-const validData = (value: unknown): value is AppData => {
+const hasValidDataShape = (value: unknown): value is AppData => {
   if (!value || typeof value !== "object") return false;
   const data = value as Partial<AppData>;
-  return data.version === 3 && Array.isArray(data.phases) && Array.isArray(data.projects) && Array.isArray(data.sessions) && Boolean(data.settings?.jarvis);
+  return data.version === 3 && Array.isArray(data.phases) && Array.isArray(data.projects) && Array.isArray(data.sessions) && Boolean(data.settings);
 };
 
 const migrateData = (value: unknown): AppData | null => {
-  if (validData(value)) return value;
+  if (hasValidDataShape(value)) {
+    const { jarvis: _removedJarvis, ...settings } = value.settings as AppData["settings"] & { jarvis?: unknown };
+    void _removedJarvis;
+    return { ...value, settings };
+  }
   if (!value || typeof value !== "object") return null;
   const legacy = value as Partial<AppData>;
   if (![1, 2].includes(legacy.version ?? 0) || !Array.isArray(legacy.phases) || !Array.isArray(legacy.projects) || !Array.isArray(legacy.resources) || !legacy.settings) return null;
-  const defaults = createSeedData().settings.jarvis;
+  const { jarvis: _removedJarvis, ...settings } = legacy.settings as AppData["settings"] & { jarvis?: unknown };
+  void _removedJarvis;
   return {
     ...(legacy as AppData),
     version: 3,
     sessions: legacy.version === 1 ? [] : legacy.sessions ?? [],
-    settings: { ...(legacy.settings as AppData["settings"]), jarvis: defaults },
+    settings,
   };
 };
 

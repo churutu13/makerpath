@@ -1,6 +1,6 @@
 # MakerPath
 
-MakerPath è una web app mobile-first per organizzare roadmap, progetti, risorse e sessioni di studio da maker. Include Jarvis Core, un assistente vocale che usa i dati locali dell’app per rispondere e avviare azioni.
+MakerPath è una web app mobile-first per organizzare roadmap, progetti, risorse e sessioni di studio da maker.
 
 ## Avvio locale
 
